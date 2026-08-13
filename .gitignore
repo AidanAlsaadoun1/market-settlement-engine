@@ -1,0 +1,19 @@
+# Foundry build artifacts
+out/
+cache/
+broadcast/
+
+# Dependencies
+lib/
+
+# Secrets — never commit
+.env
+.env.*
+
+# Go (for the indexer later)
+indexer/bin/
+*.exe
+
+# Editor/OS noise
+.vscode/
+.DS_Store
