@@ -74,6 +74,10 @@ cd indexer && go run .
 
 The main contract test walks a full market lifecycle with three participants (buy on both sides, resolve, winning claims, losing claim reverts, double-claim reverts).
 
+<img width="478" height="169" alt="image" src="https://github.com/user-attachments/assets/46e48742-f134-4c26-8203-2e50f273b97e" />
+<img width="277" height="88" alt="image" src="https://github.com/user-attachments/assets/f9ede9a7-9fca-4b41-869c-797af2f7cc5c" />
+
+
 ## Known limitations (deliberate scope decisions)
 
 - **Centralised oracle**: `resolve` is owner-only. A production market would use a decentralised oracle or dispute mechanism.
