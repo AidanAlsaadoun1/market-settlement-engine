@@ -11,8 +11,12 @@ lib/
 .env.*
 
 # Go (for the indexer later)
-indexer/bin/
+# Go
+indexer/indexer
 *.exe
+*.test
+*.out
+vendor/
 
 # Editor/OS noise
 .vscode/
