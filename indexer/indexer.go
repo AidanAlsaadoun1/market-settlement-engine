@@ -80,6 +80,8 @@ func runIndexer(
 
 		if to >= safe {
 			time.Sleep(pollInterval)
+		} else {
+			time.Sleep(300 * time.Millisecond) // gentle throttle
 		}
 	}
 }
