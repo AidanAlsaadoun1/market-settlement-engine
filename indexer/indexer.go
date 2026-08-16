@@ -14,7 +14,7 @@ import (
 
 const (
 	confirmations uint64 = 6
-	chunkSize     uint64 = 2000
+	chunkSize     uint64 = 8
 	pollInterval         = 15 * time.Second
 )
 
