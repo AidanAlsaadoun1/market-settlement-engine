@@ -81,21 +81,28 @@ A Go service that copies the contract's event history into PostgreSQL and keeps 
 
 ## Running it
 
+### One command (Docker)
+
+```bash
+cp .env.example .env    # fill in RPC_URL and CONTRACT (Sepolia)
+docker compose up --build
+# postgres -> migrations -> indexer, in order
+# watch for: "reconciliation: all markets consistent"
+```
+
+### Manual (local Postgres + Go toolchain)
+
 ```bash
 # 1. Contract tests
-cd contracts
-forge install
-forge test -vv
+cd contracts && forge install && forge test -vv
 
-# 2. Database (Postgres 16, local or docker compose up -d)
+# 2. Migrations
 migrate -path indexer/migrations \
   -database "postgres://postgres:dev@localhost:5432/postgres?sslmode=disable" up
 
 # 3. Indexer
-cp .env.example .env    # fill in your RPC URL, contract address, database URL
 export $(grep -v '^#' .env | xargs)
 cd indexer && go run .
-# watch for: "reconciliation: all markets consistent"
 ```
 
 The main contract test walks a full market lifecycle with three participants (buy on both sides, resolve, winning claims, losing claim reverts, double-claim reverts).

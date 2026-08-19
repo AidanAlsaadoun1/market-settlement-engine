@@ -1,0 +1,4 @@
+# Keep the build context small and the image free of local noise.
+*.exe
+*.test
+*.out
