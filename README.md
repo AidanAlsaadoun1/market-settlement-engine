@@ -5,6 +5,7 @@ A miniature prediction-market settlement system: a Solidity parimutuel market co
 Built to explore the correctness problems real-money trading platforms face: idempotent event ingestion, auditable state, and detecting drift between two systems of record.
 
 ## Architecture
+
 ```mermaid
 flowchart TB
     subgraph chain["Sepolia (source of truth)"]
@@ -40,28 +41,23 @@ flowchart TB
 - [x] Go indexer: checkpointed backfill of event logs, idempotent upserts into an append-only ledger
 - [x] Derived state (markets, positions) folded from the ledger
 - [x] Reconciler: on-chain view calls vs off-chain SQL, divergence alerting
-- [X] Fault-injection demo
+- [x] Fault-injection demo
 
-## How it works
+## The fold and the reconciler
 
-```
-Solidity contract (Sepolia)
-        | event logs (JSON-RPC)
-        v
-   Go indexer  -- poll, checkpoint, decode
-        v
- chain_events (Postgres, append-only)
-        v  fold
- derived state: markets, positions
-        ^
-        |  compared every cycle by the
-   Reconciler  <-- view calls to the contract
-        |
-        v
- reconciliation_runs + alert on divergence
-```
+The contract is the system of record. Events narrate every state change; the indexer writes the narration down into an append-only ledger. Derived state (`markets`, `positions`) is **disposable by design**: on every pass the fold truncates it and rebuilds it by replaying the ledger in chain order, inside one transaction, so a corrupted projection heals itself on the next cycle. The reconciler then verifies the projection independently: view calls ask the contract for its pool totals, and every comparison is recorded in `reconciliation_runs`, pass or fail, with both sides' numbers. Because the contract's pools and the database's sums are two accounts of the same events, they must always agree. The reconciler is the proof that they do.
 
-The contract is the system of record. Events narrate every state change; the indexer writes the narration down; derived state is rebuilt purely by folding over the ledger. Because the contract's pools and the database's sums are two accounts of the same events, they must always agree. The reconciler checks that they do.
+## Fault injection: catch and heal
+
+Corrupting a derived pool by hand (`UPDATE markets SET yes_pool = yes_pool + 999999 ...`) demonstrates both halves of the design:
+
+<img width="478" height="169" alt="Reconciliation failure log showing on-chain vs derived pool mismatch" src="https://github.com/user-attachments/assets/46e48742-f134-4c26-8203-2e50f273b97e" />
+
+*The reconciler catches the divergence on its next pass, recording both sides' numbers in `reconciliation_runs`.*
+
+<img width="277" height="88" alt="Subsequent pass showing consistency restored after the fold rebuilt derived state" src="https://github.com/user-attachments/assets/f9ede9a7-9fca-4b41-869c-797af2f7cc5c" />
+
+*One pass later it has healed itself: the fold rebuilt the projection from the ledger. The corruption was never in the source of truth, so it could not survive.*
 
 ## The contract
 
@@ -99,13 +95,10 @@ migrate -path indexer/migrations \
 cp .env.example .env    # fill in your RPC URL, contract address, database URL
 export $(grep -v '^#' .env | xargs)
 cd indexer && go run .
+# watch for: "reconciliation: all markets consistent"
 ```
 
 The main contract test walks a full market lifecycle with three participants (buy on both sides, resolve, winning claims, losing claim reverts, double-claim reverts).
-
-<img width="478" height="169" alt="image" src="https://github.com/user-attachments/assets/46e48742-f134-4c26-8203-2e50f273b97e" />
-<img width="277" height="88" alt="image" src="https://github.com/user-attachments/assets/f9ede9a7-9fca-4b41-869c-797af2f7cc5c" />
-
 
 ## Known limitations (deliberate scope decisions)
 
@@ -114,6 +107,7 @@ The main contract test walks a full market lifecycle with three participants (bu
 - **Stuck funds edge case**: if a market resolves with an empty winning pool, the losing pool is unclaimable. Acceptable for v1; a production version would add a refund path.
 - **Confirmation depth, not reorg rollback**: the indexer trails the chain head by 6 confirmations rather than storing block hashes and re-ingesting from fork points. Block hashes are stored in the ledger, so full rollback is a straightforward extension.
 - **Polling, not WebSocket subscription**: simpler and self-healing at this scale; the backfill path doubles as crash recovery.
+- **Full re-fold each pass, not incremental**: derived state is rebuilt from the entire ledger every cycle. Deliberate at this event volume, and it makes "disposable derived state" literally true. At production volume the fold would advance from its own checkpoint, mirroring the indexer.
 - **Free-tier RPC constraints**: the block range per `eth_getLogs` call and the backfill pace are tuned to Alchemy's free-tier limits (10-block inclusive ranges, throttled request rate). With a paid or less restricted endpoint, `chunkSize` scales up with no code changes.
 - **Fatal on repeated RPC failure is acceptable here**: the checkpoint makes restarts free. Production would add exponential backoff and alerting.
 
