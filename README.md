@@ -4,14 +4,43 @@ A miniature prediction-market settlement system: a Solidity parimutuel market co
 
 Built to explore the correctness problems real-money trading platforms face: idempotent event ingestion, auditable state, and detecting drift between two systems of record.
 
+## Architecture
+```mermaid
+flowchart TB
+    subgraph chain["Sepolia (source of truth)"]
+        C["SettlementMarket contract<br/><i>createMarket · buy · resolve · claim</i>"]
+    end
+
+    subgraph indexer["Go indexer"]
+        P["Polling loop<br/><i>chunked ranges, latest − 6 confirmations</i>"]
+        F["Fold<br/><i>replay ledger in chain order</i>"]
+        R["Reconciler<br/><i>view calls vs derived state</i>"]
+    end
+
+    subgraph pg["PostgreSQL"]
+        L[("chain_events<br/><i>append-only ledger</i>")]
+        D[("markets · positions<br/><i>derived, disposable</i>")]
+        A[("reconciliation_runs<br/><i>audit trail</i>")]
+        K[("checkpoints")]
+    end
+
+    C -- "event logs (JSON-RPC)" --> P
+    P -- "idempotent insert<br/>ON CONFLICT (tx_hash, log_index)" --> L
+    P -- "advance after writes" --> K
+    L -- "fold: truncate + replay" --> D
+    D -- "derived pools" --> R
+    C -- "view calls: on-chain pools" --> R
+    R -- "record every check,<br/>alert on divergence" --> A
+```
+
 ## Status
 
 - [x] Parimutuel market contract (`createMarket` / `buy` / `resolve` / `claim`) with Foundry lifecycle tests
 - [x] Deployed and verified on Sepolia: [`0x36A7cf4DCD4a722Afc3F0Fd3861729CeF5c8B516`](https://sepolia.etherscan.io/address/0x36A7cf4DCD4a722Afc3F0Fd3861729CeF5c8B516)
 - [x] Go indexer: checkpointed backfill of event logs, idempotent upserts into an append-only ledger
-- [ ] Derived state (markets, positions) folded from the ledger
-- [ ] Reconciler: on-chain view calls vs off-chain SQL, divergence alerting
-- [ ] Fault-injection demo
+- [x] Derived state (markets, positions) folded from the ledger
+- [x] Reconciler: on-chain view calls vs off-chain SQL, divergence alerting
+- [X] Fault-injection demo
 
 ## How it works
 
