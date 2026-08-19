@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const deploymentBlock uint64 = 11488340 //TODO: change this to actual deployment block
+const deploymentBlock uint64 = 11488340
 
 func getEnv(key string) string {
 	v := os.Getenv(key)
@@ -71,7 +71,11 @@ func main() {
 		log.Fatalf("filterer init failed: %v", err)
 	}
 
-	if err := runIndexer(ctx, client, filterer, pool); err != nil {
+	caller, err := bindings.NewMarketCaller(contractAddr, client)
+	if err != nil {
+		log.Fatalf("caller init failed: %v", err)
+	}
+	if err := runIndexer(ctx, client, filterer, caller, pool); err != nil {
 		log.Fatalf("indexer stopped: %v", err)
 	}
 }

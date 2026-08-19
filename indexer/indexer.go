@@ -22,6 +22,7 @@ func runIndexer(
 	ctx context.Context,
 	client *ethclient.Client,
 	filterer *bindings.MarketFilterer,
+	caller *bindings.MarketCaller,
 	pool *pgxpool.Pool,
 ) error {
 
@@ -76,6 +77,19 @@ func runIndexer(
 		if err := dao.SetCheckpoint(ctx, pool, to); err != nil {
 			return err
 		}
+
+		if err := foldEvents(ctx, pool); err != nil {
+			return err // fold failure is a state problem: die loudly, restart is safe
+		}
+
+		failures, err := runReconciliation(ctx, caller, pool)
+		if err != nil {
+			return err
+		}
+		if failures == 0 {
+			log.Printf("reconciliation: all markets consistent")
+		}
+
 		log.Printf("indexed blocks %d-%d, %d events", from, to, count)
 
 		if to >= safe {
